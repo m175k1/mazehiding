@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHROUD — Maze Hide &amp; Seek</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0d12;
+    --panel:#12161f;
+    --panel-edge:#1e2430;
+    --wall:#232c3d;
+    --floor:#0e131c;
+    --text:#e9e7df;
+    --muted:#7c8494;
+    --amber:#f2b134;
+    --danger:#e5484d;
+    --teal:#3ecf9a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:'JetBrains Mono',monospace;height:100%;overflow:hidden;}
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;}
+  #app{width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
+  .screen{display:none;flex-direction:column;align-items:center;gap:18px;width:100%;height:100%;
+    justify-content:center;padding:20px;}
+  .screen.active{display:flex;}
+
+  /* --- HOME --- */
+  .brand{text-align:center;margin-bottom:6px;}
+  .brand .mark{font-size:13px;letter-spacing:.35em;color:var(--amber);text-transform:uppercase;margin-bottom:6px;}
+  .brand h1{font-size:52px;margin:0;letter-spacing:.02em;
+    background:linear-gradient(90deg,#f2b134,#e5484d);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .brand p{color:var(--muted);margin-top:8px;font-size:14px;letter-spacing:.03em;}
+
+  .panel{background:var(--panel);border:1px solid var(--panel-edge);border-radius:10px;padding:28px 32px;
+    width:340px;display:flex;flex-direction:column;gap:14px;}
+  .row{display:flex;gap:10px;}
+  input[type=text]{background:var(--floor);border:1px solid var(--panel-edge);color:var(--text);
+    padding:11px 12px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:14px;width:100%;
+    letter-spacing:.05em;}
+  input[type=text]:focus{outline:none;border-color:var(--amber);}
+  button{cursor:pointer;border:none;border-radius:6px;padding:12px 16px;font-family:'Space Grotesk',sans-serif;
+    font-weight:700;font-size:14px;letter-spacing:.02em;transition:transform .08s ease, filter .15s ease;}
+  button:active{transform:scale(.97);}
+  .btn-primary{background:var(--amber);color:#221605;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-secondary{background:transparent;color:var(--teal);border:1px solid var(--teal);}
+  .btn-secondary:hover{background:rgba(62,207,154,.08);}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}
+  .divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px;letter-spacing:.15em;
+    text-transform:uppercase;margin:2px 0;}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--panel-edge);}
+  .err{color:var(--danger);font-size:12px;min-height:14px;text-align:center;}
+
+  /* --- LOBBY --- */
+  .code-box{background:var(--floor);border:1px dashed var(--amber);border-radius:8px;padding:14px 18px;
+    text-align:center;}
+  .code-box .lbl{font-size:10px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+  .code-box .code{font-size:26px;color:var(--amber);letter-spacing:.12em;font-weight:600;}
+  .players-list{width:340px;background:var(--panel);border:1px solid var(--panel-edge);border-radius:10px;
+    padding:14px;display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;}
+  .player-row{display:flex;align-items:center;gap:10px;font-size:13px;padding:6px 8px;border-radius:6px;
+    background:var(--floor);}
+  .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .you-tag{color:var(--muted);font-size:11px;margin-left:auto;}
+
+  /* --- GAME --- */
+  #gameWrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;}
+  #hud{display:flex;gap:22px;align-items:center;font-size:13px;color:var(--muted);letter-spacing:.03em;}
+  #hud .stat{color:var(--text);}
+  #hud .roleTag{padding:3px 10px;border-radius:20px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;}
+  .role-seeker{background:rgba(229,72,77,.15);color:var(--danger);border:1px solid var(--danger);}
+  .role-hider{background:rgba(242,177,52,.15);color:var(--amber);border:1px solid var(--amber);}
+  #canvasBox{border:1px solid var(--panel-edge);border-radius:10px;overflow:hidden;background:var(--floor);
+    box-shadow:0 0 60px rgba(0,0,0,.5);}
+  #gameCanvas{display:block;}
+  #toast{position:absolute;top:-6px;left:50%;transform:translateX(-50%);background:var(--panel);
+    border:1px solid var(--amber);color:var(--amber);padding:8px 18px;border-radius:20px;font-size:12px;
+    letter-spacing:.05em;opacity:0;transition:opacity .3s ease,top .3s ease;pointer-events:none;}
+  #toast.show{opacity:1;top:-42px;}
+  .hint{color:var(--muted);font-size:11px;text-align:center;letter-spacing:.03em;}
+
+  /* --- END --- */
+  .end-title{font-size:34px;margin:0;}
+  .end-sub{color:var(--muted);font-size:13px;margin-top:-6px;}
+
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--panel-edge);border-radius:3px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME SCREEN -->
+  <div class="screen active" id="screen-home">
+    <div class="brand">
+      <div class="mark">Real-Time Maze Ops</div>
+      <h1>SHROUD</h1>
+      <p>One seeker. A maze full of shadows. Peer-to-peer, no server, no limits.</p>
+    </div>
+    <div class="panel">
+      <input type="text" id="nameInput" placeholder="your codename" maxlength="14">
+      <button class="btn-primary" id="btnCreate">Create Room</button>
+      <div class="divider">or</div>
+      <div class="row">
+        <input type="text" id="joinCodeInput" placeholder="room code" maxlength="12" style="text-transform:uppercase">
+        <button class="btn-secondary" id="btnJoin" style="white-space:nowrap;">Join</button>
+      </div>
+      <div class="err" id="homeErr"></div>
+    </div>
+  </div>
+
+  <!-- LOBBY SCREEN -->
+  <div class="screen" id="screen-lobby">
+    <h2 style="margin:0;">Lobby</h2>
+    <div class="code-box">
+      <div class="lbl">Room Code — share this</div>
+      <div class="code" id="lobbyCode">— — — —</div>
+    </div>
+    <div class="players-list" id="lobbyPlayers"></div>
+    <button class="btn-primary" id="btnStart" style="display:none;width:340px;">Start Game</button>
+    <div class="hint" id="lobbyHint">Waiting for the host to start the hunt…</div>
+    <button class="btn-danger" id="btnLeaveLobby">Leave</button>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div class="screen" id="screen-game">
+    <div id="gameWrap">
+      <div id="hud">
+        <div class="roleTag" id="roleTag">—</div>
+        <div>Time: <span class="stat" id="hudTimer">--</span></div>
+        <div>Hiders left: <span class="stat" id="hudHiders">-</span></div>
+      </div>
+      <div id="canvasBox" style="position:relative;">
+        <div id="toast"></div>
+        <canvas id="gameCanvas"></canvas>
+      </div>
+      <div class="hint">Move with WASD or Arrow Keys · stay in the light</div>
+    </div>
+  </div>
+
+  <!-- END SCREEN -->
+  <div class="screen" id="screen-end">
+    <h1 class="end-title" id="endTitle">—</h1>
+    <p class="end-sub" id="endSub"></p>
+    <button class="btn-primary" id="btnPlayAgain">Back to Lobby</button>
+  </div>
+
+</div>
+
+<script>
+/* ===================== UTIL ===================== */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+const PALETTE = ['#4fd1c5','#f2b134','#e5484d','#9d7bea','#5cc8ff','#ff8a5c','#7ee787','#f473b9'];
+
+/* ===================== MAZE GENERATION ===================== */
+const COLS = 17, ROWS = 13, CELL = 34;
+
+function generateMaze(seed){
+  const rand = mulberry32(seed);
+  // walls[r][c] = {N,E,S,W} true = wall present
+  const walls = [];
+  for(let r=0;r<ROWS;r++){
+    const row=[];
+    for(let c=0;c<COLS;c++) row.push({N:true,E:true,S:true,W:true});
+    walls.push(row);
+  }
+  const visited = Array.from({length:ROWS},()=>Array(COLS).fill(false));
+  const stack = [[0,0]];
+  visited[0][0]=true;
+  const DIRS = [[-1,0,'N','S'],[1,0,'S','N'],[0,-1,'W','E'],[0,1,'E','W']];
+  while(stack.length){
+    const [r,c] = stack[stack.length-1];
+    const options = [];
+    for(const [dr,dc,a,b] of DIRS){
+      const nr=r+dr, nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!visited[nr][nc]) options.push([nr,nc,a,b]);
+    }
+    if(options.length===0){ stack.pop(); continue; }
+    const [nr,nc,a,b] = options[Math.floor(rand()*options.length)];
+    walls[r][c][a]=false;
+    walls[nr][nc][b]=false;
+    visited[nr][nc]=true;
+    stack.push([nr,nc]);
+  }
+  return walls;
+}
+
+/* ===================== APP STATE ===================== */
+let peer = null;
+let isHost = false;
+let myId = null;
+let myName = 'agent';
+let connections = new Map(); // peerId -> DataConnection (host: all joiners; joiner: connection to host)
+let lobbyPlayers = []; // {id, name, colorIdx}
+let mazeWalls = null;
+let seed = 0;
+let roles = {}; // id -> 'seeker' | 'hider'
+let players = {}; // id -> {x,y,tx,ty,role,name,colorIdx,caught}
+let myGridPos = {x:0,y:0};
+let keysDown = {};
+let lastStepTime = 0;
+const STEP_MS = 130;
+const VISION_RADIUS = 3.4;
+let gameTimer = 90;
+let timerInterval = null;
+let gameActive = false;
+let hostAuthoritative = false;
+
+const canvas = document.getElementById('gameCanvas');
+canvas.width = COLS*CELL;
+canvas.height = ROWS*CELL;
+const ctx = canvas.getContext('2d');
+
+/* ===================== NETWORK HELPERS ===================== */
+function broadcast(data, exceptId){
+  connections.forEach((conn,id)=>{
+    if(id!==exceptId && conn.open) conn.send(data);
+  });
+}
+function sendToHost(data){
+  const conn = connections.get('HOST');
+  if(conn && conn.open) conn.send(data);
+}
+
+function makePeer(customId){
+  const p = customId ? new Peer(customId) : new Peer();
+  return p;
+}
+
+function shortCode(){
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let s='';
+  for(let i=0;i<5;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+
+/* ===================== HOME SCREEN ACTIONS ===================== */
+document.getElementById('btnCreate').addEventListener('click', ()=>{
+  myName = document.getElementById('nameInput').value.trim() || 'agent';
+  const code = shortCode();
+  document.getElementById('homeErr').textContent = 'connecting…';
+  peer = makePeer('shroud-'+code);
+  isHost = true;
+  peer.on('open', id=>{
+    myId = id;
+    document.getElementById('homeErr').textContent='';
+    document.getElementById('lobbyCode').textContent = code;
+    lobbyPlayers = [{id:myId, name:myName, colorIdx:0}];
+    renderLobby();
+    show('screen-lobby');
+    document.getElementById('btnStart').style.display='block';
+    document.getElementById('lobbyHint').textContent = "You're hosting — add players, then start.";
+  });
+  peer.on('connection', conn=>{
+    conn.on('open', ()=>{
+      connections.set(conn.peer, conn);
+    });
+    conn.on('data', data=> handleHostData(conn, data));
+    conn.on('close', ()=>{
+      connections.delete(conn.peer);
+      lobbyPlayers = lobbyPlayers.filter(p=>p.id!==conn.peer);
+      delete players[conn.peer];
+      renderLobby();
+      broadcast({type:'lobby', players:lobbyPlayers});
+    });
+  });
+  peer.on('error', err=>{
+    document.getElementById('homeErr').textContent = 'network error: '+err.type;
+  });
+});
+
+document.getElementById('btnJoin').addEventListener('click', ()=>{
+  myName = document.getElementById('nameInput').value.trim() || 'agent';
+  const raw = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+  if(!raw){ document.getElementById('homeErr').textContent='enter a room code'; return; }
+  const hostId = 'shroud-'+raw;
+  document.getElementById('homeErr').textContent = 'connecting…';
+  isHost = false;
+  peer = makePeer();
+  peer.on('open', id=>{
+    myId = id;
+    const conn = peer.connect(hostId, {reliable:true});
+    conn.on('open', ()=>{
+      connections.set('HOST', conn);
+      document.getElementById('homeErr').textContent='';
+      conn.send({type:'join', name: myName});
+      document.getElementById('lobbyCode').textContent = raw;
+      show('screen-lobby');
+      document.getElementById('lobbyHint').textContent = 'Waiting for the host to start the hunt…';
+    });
+    conn.on('data', data=> handleJoinerData(data));
+    conn.on('close', ()=>{
+      toast('Disconnected from host.');
+      show('screen-home');
+    });
+    conn.on('error', ()=>{
+      document.getElementById('homeErr').textContent = 'could not reach that room';
+    });
+  });
+  peer.on('error', err=>{
+    document.getElementById('homeErr').textContent = 'could not reach that room';
+  });
+});
+
+document.getElementById('btnLeaveLobby').addEventListener('click', ()=>{
+  location.reload();
+});
+
+/* ===================== HOST-SIDE LOGIC ===================== */
+function handleHostData(conn, data){
+  switch(data.type){
+    case 'join': {
+      const colorIdx = lobbyPlayers.length % PALETTE.length;
+      lobbyPlayers.push({id:conn.peer, name:data.name, colorIdx});
+      renderLobby();
+      broadcast({type:'lobby', players:lobbyPlayers});
+      conn.send({type:'lobby', players:lobbyPlayers});
+      break;
+    }
+    case 'pos': {
+      if(players[conn.peer] && !players[conn.peer].caught){
+        players[conn.peer].x = data.x;
+        players[conn.peer].y = data.y;
+      }
+      broadcast({type:'pos', id:conn.peer, x:data.x, y:data.y}, conn.peer);
+      checkCatch(conn.peer);
+      break;
+    }
+    /* note: rx/ry (visual position) are updated separately each frame in gameLoop's
+       interpolation step and never used for catch detection, which relies only on
+       the authoritative x/y set above. */
+    case 'caughtReport': {
+      // a hider reports the seeker touched them, or seeker reports catching someone
+      break;
+    }
+  }
+}
+
+function renderLobby(){
+  const box = document.getElementById('lobbyPlayers');
+  box.innerHTML='';
+  lobbyPlayers.forEach(p=>{
+    const row = document.createElement('div');
+    row.className='player-row';
+    row.innerHTML = `<div class="dot" style="background:${PALETTE[p.colorIdx]}"></div>
+      <div>${p.name}</div>
+      ${p.id===myId ? '<div class="you-tag">YOU'+(isHost?' · HOST':'')+'</div>' : ''}`;
+    box.appendChild(row);
+  });
+}
+
+document.getElementById('btnStart').addEventListener('click', ()=>{
+  if(lobbyPlayers.length < 2){ toast('need at least 2 players'); return; }
+  startGame();
+});
+
+function startGame(){
+  seed = Math.floor(Math.random()*1e9);
+  mazeWalls = generateMaze(seed);
+  const ids = lobbyPlayers.map(p=>p.id);
+  const seekerId = ids[Math.floor(Math.random()*ids.length)];
+  roles = {};
+  ids.forEach(id=> roles[id] = (id===seekerId) ? 'seeker' : 'hider');
+
+  players = {};
+  ids.forEach((id,i)=>{
+    const p = lobbyPlayers.find(x=>x.id===id);
+    const gx = (roles[id]==='seeker') ? 0 : COLS-1;
+    const gy = (roles[id]==='seeker') ? 0 : ROWS-1;
+    players[id] = {
+      x: gx, y: gy, rx: gx, ry: gy,
+      role: roles[id],
+      name: p.name,
+      colorIdx: p.colorIdx,
+      caught:false
+    };
+  });
+
+  const payload = {type:'start', seed, roles, players, duration:90};
+  broadcast(payload);
+  applyStart(payload);
+}
+
+function checkCatch(movedId){
+  if(!isHost) return;
+  const mover = players[movedId];
+  if(!mover) return;
+  if(mover.role==='seeker'){
+    Object.entries(players).forEach(([id,p])=>{
+      if(p.role==='hider' && !p.caught && p.x===mover.x && p.y===mover.y){
+        p.caught = true;
+        broadcast({type:'caught', id});
+        onCaughtLocal(id);
+        checkWin();
+      }
+    });
+  } else {
+    const seeker = Object.entries(players).find(([id,p])=>p.role==='seeker');
+    if(seeker && mover.x===seeker[1].x && mover.y===seeker[1].y && !mover.caught){
+      mover.caught = true;
+      broadcast({type:'caught', id:movedId});
+      onCaughtLocal(movedId);
+      checkWin();
+    }
+  }
+}
+function checkWin(){
+  if(!isHost) return;
+  const hiders = Object.entries(players).filter(([id,p])=>p.role==='hider');
+  const remaining = hiders.filter(([id,p])=>!p.caught);
+  if(remaining.length===0){
+    endGame('seeker');
+    broadcast({type:'end', winner:'seeker'});
+  }
+}
+
+/* ===================== JOINER-SIDE LOGIC ===================== */
+function handleJoinerData(data){
+  switch(data.type){
+    case 'lobby':
+      lobbyPlayers = data.players;
+      renderLobby();
+      break;
+    case 'start':
+      applyStart(data);
+      break;
+    case 'pos':
+      if(players[data.id]){
+        players[data.id].x = data.x;
+        players[data.id].y = data.y;
+      }
+      break;
+    case 'caught':
+      onCaughtLocal(data.id);
+      break;
+    case 'end':
+      endGame(data.winner);
+      break;
+    case 'timer':
+      gameTimer = data.t;
+      updateHud();
+      break;
+  }
+}
+
+/* ===================== SHARED GAME START ===================== */
+function applyStart(data){
+  seed = data.seed;
+  mazeWalls = generateMaze(seed);
+  roles = data.roles;
+  players = data.players;
+  Object.values(players).forEach(p=>{ p.rx=p.x; p.ry=p.y; });
+  myGridPos.x = players[myId].x;
+  myGridPos.y = players[myId].y;
+  gameTimer = data.duration || 90;
+  gameActive = true;
+  document.getElementById('roleTag').textContent = roles[myId].toUpperCase();
+  document.getElementById('roleTag').className = 'roleTag ' + (roles[myId]==='seeker' ? 'role-seeker':'role-hider');
+  show('screen-game');
+  toast(roles[myId]==='seeker' ? 'Find every hider before time runs out.' : 'Stay hidden. Survive the clock.');
+  updateHud();
+  if(isHost){
+    clearInterval(timerInterval);
+    timerInterval = setInterval(()=>{
+      gameTimer--;
+      broadcast({type:'timer', t:gameTimer});
+      updateHud();
+      if(gameTimer<=0){
+        clearInterval(timerInterval);
+        endGame('hiders');
+        broadcast({type:'end', winner:'hiders'});
+      }
+    },1000);
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+function onCaughtLocal(id){
+  if(players[id]) players[id].caught = true;
+  if(id===myId && roles[myId]==='hider'){
+    toast('You were caught!');
+  } else {
+    toast((players[id]?players[id].name:'someone') + ' was caught');
+  }
+  updateHud();
+}
+
+function updateHud(){
+  document.getElementById('hudTimer').textContent = Math.max(0,gameTimer)+'s';
+  const hiders = Object.values(players).filter(p=>p.role==='hider');
+  const remaining = hiders.filter(p=>!p.caught).length;
+  document.getElementById('hudHiders').textContent = remaining+'/'+hiders.length;
+}
+
+function endGame(winner){
+  gameActive = false;
+  clearInterval(timerInterval);
+  const iWon = (winner==='seeker' && roles[myId]==='seeker') || (winner==='hiders' && roles[myId]==='hider');
+  document.getElementById('endTitle').textContent = iWon ? 'You Win' : 'You Lose';
+  document.getElementById('endTitle').style.color = iWon ? '#3ecf9a' : '#e5484d';
+  document.getElementById('endSub').textContent = winner==='seeker'
+    ? 'The seeker found every hider.'
+    : 'Time ran out — the hiders made it.';
+  show('screen-end');
+}
+
+document.getElementById('btnPlayAgain').addEventListener('click', ()=>{
+  show('screen-lobby');
+  if(isHost) document.getElementById('btnStart').style.display='block';
+});
+
+/* ===================== MOVEMENT ===================== */
+window.addEventListener('keydown', e=>{ keysDown[e.key.toLowerCase()]=true; });
+window.addEventListener('keyup', e=>{ keysDown[e.key.toLowerCase()]=false; });
+
+function tryMove(){
+  if(!gameActive) return;
+  if(players[myId] && players[myId].caught) return;
+  const now = performance.now();
+  if(now - lastStepTime < STEP_MS) return;
+  let dx=0, dy=0;
+  if(keysDown['arrowup']||keysDown['w']) dy=-1;
+  else if(keysDown['arrowdown']||keysDown['s']) dy=1;
+  else if(keysDown['arrowleft']||keysDown['a']) dx=-1;
+  else if(keysDown['arrowright']||keysDown['d']) dx=1;
+  if(dx===0 && dy===0) return;
+
+  const cx = myGridPos.x, cy = myGridPos.y;
+  const w = mazeWalls[cy][cx];
+  let blocked = false;
+  if(dx===1 && w.E) blocked=true;
+  if(dx===-1 && w.W) blocked=true;
+  if(dy===1 && w.S) blocked=true;
+  if(dy===-1 && w.N) blocked=true;
+  const nx = cx+dx, ny = cy+dy;
+  if(blocked || nx<0||nx>=COLS||ny<0||ny>=ROWS) return;
+
+  myGridPos.x = nx; myGridPos.y = ny;
+  lastStepTime = now;
+  if(players[myId]){ players[myId].x=nx; players[myId].y=ny; players[myId].rx=nx; players[myId].ry=ny; }
+
+  if(isHost){
+    broadcast({type:'pos', id:myId, x:nx, y:ny});
+    checkCatch(myId);
+  } else {
+    sendToHost({type:'pos', x:nx, y:ny});
+  }
+}
+
+/* ===================== RENDER ===================== */
+function drawMaze(){
+  ctx.fillStyle = '#0e131c';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = '#2b3549';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const x = c*CELL, y = r*CELL;
+      const w = mazeWalls[r][c];
+      ctx.beginPath();
+      if(w.N){ ctx.moveTo(x,y); ctx.lineTo(x+CELL,y); }
+      if(w.S){ ctx.moveTo(x,y+CELL); ctx.lineTo(x+CELL,y+CELL); }
+      if(w.W){ ctx.moveTo(x,y); ctx.lineTo(x,y+CELL); }
+      if(w.E){ ctx.moveTo(x+CELL,y); ctx.lineTo(x+CELL,y+CELL); }
+      ctx.stroke();
+    }
+  }
+}
+
+function drawVignette(rx,ry){
+  const cx = rx*CELL + CELL/2, cy = ry*CELL + CELL/2;
+  const r0 = CELL*0.9, r1 = CELL*VISION_RADIUS*1.55;
+  const grad = ctx.createRadialGradient(cx,cy,r0,cx,cy,r1);
+  grad.addColorStop(0,'rgba(5,7,11,0)');
+  grad.addColorStop(1,'rgba(4,6,10,0.93)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+function drawPlayer(p, isMe){
+  const x = p.rx*CELL + CELL/2, y = p.ry*CELL + CELL/2;
+  const color = PALETTE[p.colorIdx];
+  ctx.save();
+  if(isMe){
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 18;
+  }
+  ctx.beginPath();
+  ctx.fillStyle = p.caught ? '#3a3f4a' : color;
+  ctx.arc(x,y, CELL*0.28, 0, Math.PI*2);
+  ctx.fill();
+  if(p.role==='seeker'){
+    ctx.strokeStyle = '#e5484d';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function gameLoop(){
+  if(!gameActive){ return; }
+  tryMove();
+
+  // smooth every player's visual position toward their authoritative grid position
+  Object.values(players).forEach(p=>{
+    p.rx = p.rx + (p.x-p.rx)*0.35;
+    p.ry = p.ry + (p.y-p.ry)*0.35;
+  });
+
+  drawMaze();
+  const me = players[myId];
+  drawVignette(me.rx, me.ry);
+
+  Object.entries(players).forEach(([id,p])=>{
+    if(id===myId) return;
+    const dist = Math.hypot(p.x-me.x, p.y-me.y);
+    if(dist <= VISION_RADIUS && !p.caught) drawPlayer(p,false);
+  });
+  drawPlayer(me,true);
+
+  requestAnimationFrame(gameLoop);
+}
+</script>
+</body>
+</html>
